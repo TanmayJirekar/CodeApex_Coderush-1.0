@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Medicine Reminder</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+        .container { max-width: 400px; margin: 40px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 15px; }
+        input[type="text"], input[type="time"] { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        button { margin-top: 20px; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; width: 100%; }
+        ul { margin-top: 20px; padding-left: 0; }
+        li { list-style: none; background: #e9ecef; margin-bottom: 10px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .remove-btn { background: #dc3545; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Medicine Reminder</h2>
+        <form id="reminderForm">
+            <label for="medicineName">Medicine Name:</label>
+            <input type="text" id="medicineName" required>
+
+            <label for="reminderTime">Time:</label>
+            <input type="time" id="reminderTime" required>
+
+            <button type="submit">Add Reminder</button>
+        </form>
+        <ul id="reminderList"></ul>
+        <div id="notificationHelp" style="margin-top:20px; color:#dc3545; text-align:center;"></div>
+    </div>
+    <script>
+        // Request notification permission on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission !== 'granted') {
+                        document.getElementById('notificationHelp').textContent =
+                            "Please allow notifications in your browser for reminders to work.";
+                    }
+                });
+            } else {
+                document.getElementById('notificationHelp').textContent =
+                    "Your browser does not support notifications.";
+            }
+            loadReminders();
+        });
+
+        const reminderForm = document.getElementById('reminderForm');
+        const reminderList = document.getElementById('reminderList');
+
+        let reminders = [];
+
+        reminderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('medicineName').value.trim();
+            const time = document.getElementById('reminderTime').value;
+            if (!name || !time) return;
+
+            const reminder = { name, time };
+            reminders.push(reminder);
+            saveReminders();
+            renderReminders();
+            scheduleNotification(reminder);
+
+            reminderForm.reset();
+        });
+
+        function renderReminders() {
+            reminderList.innerHTML = '';
+            reminders.forEach((reminder, idx) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${reminder.name} at ${reminder.time}</span>
+                    <button class="remove-btn" onclick="removeReminder(${idx})">Remove</button>`;
+                reminderList.appendChild(li);
+            });
+        }
+
+        function removeReminder(idx) {
+            reminders.splice(idx, 1);
+            saveReminders();
+            renderReminders();
+        }
+
+        function saveReminders() {
+            localStorage.setItem('medicineReminders', JSON.stringify(reminders));
+        }
+
+        function loadReminders() {
+            const saved = localStorage.getItem('medicineReminders');
+            if (saved) {
+                reminders = JSON.parse(saved);
+                reminders.forEach(scheduleNotification);
+                renderReminders();
+            }
+        }
+
+        function scheduleNotification(reminder) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+            const now = new Date();
+            const [hours, minutes] = reminder.time.split(':').map(Number);
+            let reminderTime = new Date();
+            reminderTime.setHours(hours, minutes, 0, 0);
+
+            // If the time is already passed today, schedule for tomorrow
+            if (reminderTime <= now) {
+                reminderTime.setDate(reminderTime.getDate() + 1);
+            }
+
+            const timeout = reminderTime - now;
+            setTimeout(() => {
+                // Show browser notification
+                if (Notification.permission === 'granted') {
+                    new Notification('Medicine Reminder', {
+                        body: `Time to take your medicine: ${reminder.name}`,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/2921/2921822.png'
+                    });
+                }
+                // Also show an alert as a fallback
+                alert(`Time to take your medicine: ${reminder.name}`);
+                // Reschedule for next day
+                scheduleNotification(reminder);
+            }, timeout);
+        }
+
+        // Expose removeReminder to global scope
+        window.removeReminder = removeReminder;
+    </script>
+    </body>
+    </html>
